@@ -2,7 +2,12 @@ import psycopg2
 from psycopg2.sql import SQL, Identifier
 
 def create_db(conn):
-    with conn.cursor() as cur:  
+
+    with conn.cursor() as cur:
+        cur.execute("""
+                    DROP TABLE client_phone;
+                    DROP TABLE clients;
+                    """)  
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS clients(
                     id SERIAL PRIMARY KEY,
