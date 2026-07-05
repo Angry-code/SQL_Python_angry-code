@@ -5,15 +5,15 @@ def create_db(conn):
 
     with conn.cursor() as cur:
         cur.execute("""
-                    DROP TABLE client_phone;
-                    DROP TABLE clients;
+                    DROP TABLE IF EXISTS client_phone;
+                    DROP TABLE IF EXISTS clients;
                     """)  
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS clients(
                     id SERIAL PRIMARY KEY,
-                    first_name VARCHAR(40) NOT NULL UNIQUE,
-                    last_name VARCHAR(40) NOT NULL UNIQUE,
-                    email VARCHAR(100)
+                    first_name VARCHAR(40) NOT NULL,
+                    last_name VARCHAR(40) NOT NULL,
+                    email VARCHAR(100) UNIQUE
                     );
                     """)
         conn.commit()
@@ -43,6 +43,7 @@ def add_client(conn, first_name, last_name, email, phones=None):
                     VALUES (%s, %s, %s)
                     RETURNING id;
                     """, (first_name, last_name, email))
+        conn.commit()
         print (f'Присвоенный id:', cur.fetchone())   
  
 def add_phone(conn, client, phone):
@@ -70,6 +71,7 @@ def add_phone(conn, client, phone):
                     VALUES (%s, %s)
                     RETURNING id;
                     """, (client, phone))
+        conn.commit()
         print (f'Id нового телефона:', cur.fetchone())
 
 def change_client(conn, client_id, first_name=None, last_name=None, email=None, phones=None):
@@ -102,7 +104,7 @@ def delete_phone(conn, client_id, phone):
                     SELECT phone 
                     FROM client_phone
                     WHERE phone=%s AND client=%s;
-                    """, (client_id, phone,))
+                    """, (phone, client_id,))
         if len(cur.fetchall()) == 0:
             print('Номера нет в базе!')
             return
@@ -134,19 +136,26 @@ def delete_client(conn, client_id):
 def find_client(conn, first_name=None, last_name=None, email=None, phone=None):
     with conn.cursor() as cur:
         cur.execute("""
-                    SELECT c.first_name, c.last_name, c.email, p.number
-                    FROM clients c
-			        LEFT JOIN client_phone p ON c.client_id = p.client_id
-			        WHERE c.first_name=%s OR c.last_name=%s OR c.email=%s OR p.phone=%s;
-			""", (first_name, last_name, email, phone,))
-        print(f'Запрашиваемая запись:', cur.fetcall())
+                    SELECT first_name, last_name, email, phone
+                    FROM clients cl
+			        LEFT JOIN client_phone ph ON cl.id = ph.client
+			        WHERE (%s IS NULL OR cl.first_name = %s)
+              AND (%s IS NULL OR cl.last_name = %s)
+              AND (%s IS NULL OR cl.email = %s)
+              AND (%s IS NULL OR ph.phone = %s);
+			""", (first_name, first_name,
+                last_name, last_name,
+                email, email,
+                phone, phone,))
+        print(f'Запрашиваемая запись:', cur.fetchall())
 
 if __name__ == '__main__':
     with psycopg2.connect(database="05_psycopg_db", user="postgres", password="angry151786!") as conn:
         create_db(conn)
         add_client(conn,'Petr', 'Petrov', 'PetrovP@bk.ru')
         add_phone(conn, '1', '1233456657')
-        delete_phone (conn, '1', '1233456657')
-        delete_client(conn, '1') 
+        #delete_phone (conn, '1', '1233456657')
+        #delete_client(conn, '1')
+        find_client(conn, None,'Petrov', None, None)
 
     conn.close()
