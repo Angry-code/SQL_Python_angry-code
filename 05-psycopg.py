@@ -1,5 +1,9 @@
 import psycopg2
 from psycopg2.sql import SQL, Identifier
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def create_db(conn):
 
@@ -13,9 +17,10 @@ def create_db(conn):
                     id SERIAL PRIMARY KEY,
                     first_name VARCHAR(40) NOT NULL,
                     last_name VARCHAR(40) NOT NULL,
-                    email VARCHAR(100) UNIQUE
+                    email VARCHAR(100) UNIQUE,
+                    phone_cl VARCHAR(20) UNIQUE
                     );
-                    """)
+        """)
         conn.commit()
         
         cur.execute("""
@@ -27,22 +32,30 @@ def create_db(conn):
         """)
         conn.commit()
 
-def add_client(conn, first_name, last_name, email, phones=None):
+def add_client(conn, first_name, last_name, email, phone_cl=None):
     with conn.cursor() as cur:
         cur.execute("""
                     SELECT email 
                     FROM clients
                     WHERE email = %s;
                     """, (email,))
-        if len(cur.fetchall()) > 0:
+        if cur.fetchone():
             print('Email уже существует!')
             return
+        conn.commit()
     with conn.cursor() as cur:
-        cur.execute("""
+        if phone_cl:
+            cur.execute("""
+                    INSERT INTO clients (first_name, last_name, email, phone_cl)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id;
+                    """, (first_name, last_name, email, phone_cl))
+        else:
+             cur.execute("""
                     INSERT INTO clients (first_name, last_name, email)
                     VALUES (%s, %s, %s)
                     RETURNING id;
-                    """, (first_name, last_name, email))
+                    """, (first_name, last_name, email))   
         conn.commit()
         print (f'Присвоенный id:', cur.fetchone())   
  
@@ -53,9 +66,10 @@ def add_phone(conn, client, phone):
                     FROM client_phone
                     WHERE phone = %s;
                     """, (phone,))
-        if len(cur.fetchall()) > 0:
+        if cur.fetchone():
             print('Телефон уже существует!')
             return
+        conn.commit()
     with conn.cursor() as cur:
         cur.execute("""
                     SELECT id 
@@ -64,7 +78,8 @@ def add_phone(conn, client, phone):
                     """, (client,))
         if len(cur.fetchall()) == 0:
             print('Клиента нет в базе!')
-            return    
+            return
+        conn.commit()    
     with conn.cursor() as cur:
         cur.execute("""
                     INSERT INTO client_phone (client, phone)
@@ -84,6 +99,7 @@ def change_client(conn, client_id, first_name=None, last_name=None, email=None, 
         if len(cur.fetchall()) == 0:
             print('Клиента нет в базе!')
             return
+        conn.commit()
     atributes_client = {'first_name' : first_name, 'last_name' : last_name, 'email' : email}
     for key, value in atributes_client.items():
         if value:
@@ -96,6 +112,7 @@ def change_client(conn, client_id, first_name=None, last_name=None, email=None, 
                     FROM clients
                     WHERE id = %s;
                     """, (client_id,))
+        conn.commit()
         print(f'Измененные данные:', cur.fetchone())
 
 def delete_phone(conn, client_id, phone):
@@ -108,12 +125,13 @@ def delete_phone(conn, client_id, phone):
         if len(cur.fetchall()) == 0:
             print('Номера нет в базе!')
             return
+        conn.commit()
     with conn.cursor() as cur:
         cur.execute("""
 			DELETE FROM client_phone
 			WHERE phone=%s AND client=%s;
-			""", (client_id, phone))
-        
+			""", (phone, client_id,))
+        conn.commit()
         print (f'Телефон {phone} удален из базы',cur.fetchall())
 
 def delete_client(conn, client_id):
@@ -126,11 +144,13 @@ def delete_client(conn, client_id):
         if len(cur.fetchall()) == 0:
             print('Клиента нет в базе!')
             return
+        conn.commit()
     with conn.cursor() as cur:
         cur.execute("""
 			DELETE FROM clients
 			WHERE id=%s;
 			""", (client_id,))
+        conn.commit()
         print (f'Клиент с id {client_id} удален из базы')
 
 def find_client(conn, first_name=None, last_name=None, email=None, phone=None):
@@ -147,15 +167,18 @@ def find_client(conn, first_name=None, last_name=None, email=None, phone=None):
                 last_name, last_name,
                 email, email,
                 phone, phone,))
+        conn.commit()
         print(f'Запрашиваемая запись:', cur.fetchall())
 
 if __name__ == '__main__':
-    with psycopg2.connect(database="05_psycopg_db", user="postgres", password="angry151786!") as conn:
+    PASSWORD = os.getenv('PGSQL_PASSWORD')
+    with psycopg2.connect(database="05_psycopg_db", user="postgres", password= PASSWORD) as conn:
         create_db(conn)
         add_client(conn,'Petr', 'Petrov', 'PetrovP@bk.ru')
+        add_client(conn,'Ivan', 'Ivanov', 'IvanovI@bk.ru', '234591765')
         add_phone(conn, '1', '1233456657')
-        #delete_phone (conn, '1', '1233456657')
-        #delete_client(conn, '1')
+        delete_phone (conn, '2', '123456789')
+        delete_client(conn, '2')
         find_client(conn, None,'Petrov', None, None)
 
     conn.close()
